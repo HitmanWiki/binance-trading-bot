@@ -168,24 +168,26 @@ function adjustTrailingStop(currentPrice, entryPrice, stopLoss, direction) {
   return stopLoss;
 }
 
-// Place Order
-async function placeOrder(symbol, side, quantity, stopLoss, takeProfit) {
+// Place Order with Correct Precision
+async function placeOrder(symbol, side, quantity) {
+  const adjustedQuantity = parseFloat(quantity.toFixed(assetPrecision)); // Adjust to allowed precision
   const params = {
     symbol,
     side,
     type: "MARKET",
-    quantity: quantity.toFixed(4),
+    quantity: adjustedQuantity,
     timestamp: Date.now() + serverTimeOffset,
   };
 
-  const response = await binanceRequest("/fapi/v1/order", "POST", params);
-  console.log(`${side} Order Placed:`, response);
-
-  await sendTelegramMessage(
-    `${side} Order Placed:\nQuantity: ${quantity}\nStop-Loss: ${stopLoss}\nTake-Profit: ${takeProfit}`
-  );
-
-  return response;
+  try {
+    const response = await binanceRequest("/fapi/v1/order", "POST", params);
+    console.log(`${side} Order Placed:`, response);
+    await sendTelegramMessage(`${side} Order Placed:\nQuantity: ${adjustedQuantity}`);
+    return response;
+  } catch (error) {
+    console.error("Failed to place order:", error.message);
+    await sendTelegramMessage(`Failed to place order: ${error.message}`);
+  }
 }
 
 // Evaluate and Execute Trades
