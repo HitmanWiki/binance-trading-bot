@@ -225,6 +225,13 @@ async function evaluateStrategy() {
   const rawPositionSize = riskAmount / atr; // Position size based on risk and ATR
   const positionSize = Math.max(rawPositionSize, MAX_LOT_SIZE).toFixed(assetPrecision || 3); // Enforce minimum lot size
 
+  const stopLoss = currentPrice - atr; // Example stop-loss below the current price
+  const takeProfit = currentPrice + 2 * atr; // Example take-profit at 2x ATR above the price
+
+  // Calculate risk-to-reward ratio
+  const riskToReward = (takeProfit - currentPrice) / (currentPrice - stopLoss);
+
+
   // Log debug information
   console.log(`ATR: ${atr}, Risk Amount: ${riskAmount}, Raw Position Size: ${rawPositionSize}, Final Position Size: ${positionSize}`);
 
@@ -234,6 +241,13 @@ async function evaluateStrategy() {
     await sendTelegramMessage("Invalid position size. Trade skipped.");
     return;
   }
+
+  if (riskToReward < 2) {
+    console.log("Trade does not meet the minimum risk-to-reward criteria. Skipping trade.");
+    await sendTelegramMessage("Trade skipped: Risk-to-reward ratio too low.");
+    return;
+  }
+
   // Long Trade Logic
   if (
     riskToReward >= 2 &&
