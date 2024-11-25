@@ -18,6 +18,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 let serverTimeOffset = 0;
 let dailyLoss = 0;
+let assetPrecision = 3; // Default to 3 decimal places if precision is not fetched
 
 // Helper Functions
 function signRequest(params) {
@@ -67,6 +68,22 @@ async function synchronizeServerTime() {
     await sendTelegramMessage(`Failed to synchronize server time: ${error.message}`);
     // Retry synchronization after 5 seconds
     setTimeout(() => synchronizeServerTime(), 5000);
+  }
+}
+// Fetch Asset Precision
+async function fetchAssetPrecision(symbol) {
+  try {
+    const response = await binanceRequest("/fapi/v1/exchangeInfo", "GET");
+    const assetInfo = response.symbols.find((s) => s.symbol === symbol);
+    if (assetInfo) {
+      assetPrecision = assetInfo.quantityPrecision; // Dynamically set precision
+      console.log(`Asset precision for ${symbol}: ${assetPrecision}`);
+    } else {
+      console.warn(`Asset ${symbol} not found in exchangeInfo.`);
+    }
+  } catch (error) {
+    console.error("Failed to fetch asset precision:", error.message);
+    await sendTelegramMessage(`Failed to fetch asset precision: ${error.message}`);
   }
 }
 
@@ -170,7 +187,7 @@ function adjustTrailingStop(currentPrice, entryPrice, stopLoss, direction) {
 
 // Place Order with Correct Precision
 async function placeOrder(symbol, side, quantity) {
-  const adjustedQuantity = parseFloat(quantity.toFixed(assetPrecision)); // Adjust to allowed precision
+  const adjustedQuantity = parseFloat(quantity.toFixed(assetPrecision || 3)); // Adjust to allowed precision
   const params = {
     symbol,
     side,
@@ -245,6 +262,7 @@ async function evaluateStrategy() {
   try {
     // Synchronize server time at startup
     await synchronizeServerTime();
+    await fetchAssetPrecision(SYMBOL);
 
     // Repeat synchronization every hour
     setInterval(async () => {
