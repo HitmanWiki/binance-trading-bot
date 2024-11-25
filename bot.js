@@ -222,12 +222,18 @@ async function evaluateStrategy() {
   const currentPrice = closes[closes.length - 1];
 
   const riskAmount = 200 * RISK_PER_TRADE;
-  const positionSize = Math.min(riskAmount / atr, MAX_LOT_SIZE);
+  const rawPositionSize = riskAmount / atr; // Position size based on risk and ATR
+  const positionSize = Math.max(rawPositionSize, MAX_LOT_SIZE).toFixed(assetPrecision || 3); // Enforce minimum lot size
 
-  let stopLoss = currentPrice - atr;
-  let takeProfit = currentPrice + 2 * atr;
-  const riskToReward = (takeProfit - currentPrice) / (currentPrice - stopLoss);
+  // Log debug information
+  console.log(`ATR: ${atr}, Risk Amount: ${riskAmount}, Raw Position Size: ${rawPositionSize}, Final Position Size: ${positionSize}`);
 
+  // Validation for position size
+  if (positionSize <= 0) {
+    console.error("Calculated position size is invalid. Skipping trade.");
+    await sendTelegramMessage("Invalid position size. Trade skipped.");
+    return;
+  }
   // Long Trade Logic
   if (
     riskToReward >= 2 &&
