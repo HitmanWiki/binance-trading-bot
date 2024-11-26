@@ -264,7 +264,7 @@ async function evaluateStrategy() {
 // Validation for position size
 if (parseFloat(positionSize) <= 0.001) {
   console.error("Calculated position size is invalid. Skipping trade.");
-  await sendTelegramMessage("Invalid position size. Trade skipped.");
+  // await sendTelegramMessage("Invalid position size. Trade skipped.");
   return;
 }
 const minRiskToReward = atr > 500 ? 1.5 : 2; // Example: Lower R:R for high volatility
