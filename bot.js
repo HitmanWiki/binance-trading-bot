@@ -208,81 +208,111 @@ async function placeOrder(symbol, side, quantity) {
 }
 
 // Evaluate and Execute Trades
+
+
+
 async function evaluateStrategy() {
-  const data = await fetchKlines(SYMBOL, INTERVAL, 100);
+  try {
+    assetPrecision = await getAssetPrecision(SYMBOL); // Dynamically fetch precision, if applicable
 
-  const closes = data.map((candle) => candle.close);
-  const atr = calculateATR(data, 14);
-  const emaShort = calculateEMA(closes, 9).pop();
-  const emaLong = calculateEMA(closes, 21).pop();
-  const rsi = calculateRSI(closes, 14);
-  const { resistance, support } = calculateSupportResistance(data);
-  const { cprTop, cprBottom } = calculateCPR(data);
-  const { upper: bbUpper, lower: bbLower } = calculateDynamicBollingerBands(closes, atr);
-  const currentPrice = closes[closes.length - 1];
-
-  const riskAmount = 200 * RISK_PER_TRADE;
-  if (atr > 10000) {
-    riskAmount = Math.max(riskAmount, 20); // Dynamically increase risk amount for high ATR
-  }
-  const rawPositionSize = riskAmount / atr; // Position size based on risk and ATR
-  const positionSize = Math.max(rawPositionSize, 0.001).toFixed(assetPrecision || 3);
-  // Enforce minimum lot size
-
-  let stopLoss = currentPrice - atr * 1.5; // Use let because stopLoss might be reassigned
-  stopLoss = support || currentPrice - atr * 1.5; // Reassign based on support level
-  let takeProfit = currentPrice + atr * 2; // Use let for reassignment
-  takeProfit = resistance || currentPrice + atr * 2; // Reassign based on resistance level
-
-  // Calculate risk-to-reward ratio
-  const riskToReward = (takeProfit - currentPrice) / (currentPrice - stopLoss);
+    const data = await fetchKlines(SYMBOL, INTERVAL, 100);
 
 
-  // Log debug information
-  console.log(`ATR: ${atr}, Risk Amount: ${riskAmount}, Raw Position Size: ${rawPositionSize}, Final Position Size: ${positionSize}`);
 
-  // Validation for position size
-  if (parseFloat(positionSize) <= 0.001) {
-    console.error("Calculated position size is invalid. Skipping trade.");
-    await sendTelegramMessage("Invalid position size. Trade skipped.");
-    return;
-  }
-  const minRiskToReward = atr > 500 ? 1.5 : 2; // Example: Lower R:R for high volatility
 
-  if (riskToReward < minRiskToReward) {
-    console.log(`Trade skipped: Risk-to-reward ratio (${riskToReward}) is below minimum (${minRiskToReward}).`);
-    await sendTelegramMessage("Trade skipped: Risk-to-reward ratio too low.");
-    return;
-  }
-  // Long Trade Logic
-  if (
+    const closes = data.map((candle) => candle.close);
+    const atr = calculateATR(data, 14);
+    const emaShort = calculateEMA(closes, 9).pop();
+    const emaLong = calculateEMA(closes, 21).pop();
+    const rsi = calculateRSI(closes, 14);
+    const { resistance, support } = calculateSupportResistance(data);
+    const { cprTop, cprBottom } = calculateCPR(data);
+    const { upper: bbUpper, lower: bbLower } = calculateDynamicBollingerBands(closes, atr);
+    const currentPrice = closes[closes.length - 1];
 
-    emaShort > emaLong &&
-    rsi > 50 &&
-    currentPrice > cprTop &&
-    currentPrice > support
-  ) {
-    console.log("Long Signal Detected");
-    stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "BUY");
-    await placeOrder(SYMBOL, "BUY", positionSize, stopLoss, takeProfit);
-  }
+    const riskAmount = 200 * RISK_PER_TRADE;
+    if (atr > 10000) {
+      riskAmount = Math.max(riskAmount, 20); // Dynamically increase risk amount for high ATR
+    }
+    const rawPositionSize = riskAmount / atr; // Position size based on risk and ATR
+    const positionSize = Math.max(rawPositionSize, 0.001).toFixed(assetPrecision || 3);
+    // Enforce minimum lot size
 
-  // Short Trade Logic
-  else if (
+    let stopLoss = currentPrice - atr * 1.5; // Use let because stopLoss might be reassigned
+    stopLoss = support || currentPrice - atr * 1.5; // Reassign based on support level
+    let takeProfit = currentPrice + atr * 2; // Use let for reassignment
+    takeProfit = resistance || currentPrice + atr * 2; // Reassign based on resistance level
 
-    emaShort < emaLong &&
-    rsi < 50 &&
-    currentPrice < cprBottom &&
-    currentPrice < resistance
-  ) {
-    console.log("Short Signal Detected");
-    stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "SELL");
-    await placeOrder(SYMBOL, "SELL", positionSize, stopLoss, takeProfit);
-  } else {
-    console.log("No trade signal detected.");
+    // Calculate risk-to-reward ratio
+    const riskToReward = (takeProfit - currentPrice) / (currentPrice - stopLoss);
+
+
+    // Log debug information
+    console.log(`ATR: ${atr}, Risk Amount: ${riskAmount}, Raw Position Size: ${rawPositionSize}, Final Position Size: ${positionSize}`);
+
+
+  } catch (error) {
+    // Handle errors here
+    console.error("Error in evaluateStrategy:", error.message);
+    await sendTelegramMessage(`Error in evaluateStrategy: ${error.message}`);
+  } finally {
+    // Optional: Code to run after try/catch
+    console.log("Strategy evaluation cycle complete.");
   }
 }
 
+// Validation for position size
+if (parseFloat(positionSize) <= 0.001) {
+  console.error("Calculated position size is invalid. Skipping trade.");
+  await sendTelegramMessage("Invalid position size. Trade skipped.");
+  return;
+}
+const minRiskToReward = atr > 500 ? 1.5 : 2; // Example: Lower R:R for high volatility
+
+if (riskToReward < minRiskToReward) {
+  console.log(`Trade skipped: Risk-to-reward ratio (${riskToReward}) is below minimum (${minRiskToReward}).`);
+  await sendTelegramMessage("Trade skipped: Risk-to-reward ratio too low.");
+  return;
+}
+// Long Trade Logic
+if (
+
+  emaShort > emaLong &&
+  rsi > 50 &&
+  currentPrice > cprTop &&
+  currentPrice > support
+) {
+  console.log("Long Signal Detected");
+  stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "BUY");
+  await placeOrder(SYMBOL, "BUY", positionSize, stopLoss, takeProfit);
+}
+
+// Short Trade Logic
+else if (
+
+  emaShort < emaLong &&
+  rsi < 50 &&
+  currentPrice < cprBottom &&
+  currentPrice < resistance
+) {
+  console.log("Short Signal Detected");
+  stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "SELL");
+  await placeOrder(SYMBOL, "SELL", positionSize, stopLoss, takeProfit);
+} else {
+  console.log("No trade signal detected.");
+}
+
+
+
+//Function to dynamically fetch asset precision
+async function getAssetPrecision(symbol) {
+  const exchangeInfo = await binanceRequest("/fapi/v1/exchangeInfo", "GET");
+  const symbolInfo = exchangeInfo.symbols.find((s) => s.symbol === symbol);
+  if (!symbolInfo) {
+    throw new Error(`Symbol ${symbol} not found in exchange info.`);
+  }
+  return symbolInfo.quantityPrecision;
+}
 // Main Bot Loop
 (async () => {
   try {
