@@ -229,8 +229,10 @@ async function evaluateStrategy() {
   const positionSize = Math.max(rawPositionSize, 0.001).toFixed(assetPrecision || 3);
   // Enforce minimum lot size
 
-  const stopLoss = support || currentPrice - atr * 1.5;// Example stop-loss below the current price
-  const takeProfit = resistance || currentPrice + atr * 2; // Example take-profit at 2x ATR above the price
+  let stopLoss = currentPrice - atr * 1.5; // Use let because stopLoss might be reassigned
+  stopLoss = support || currentPrice - atr * 1.5; // Reassign based on support level
+  let takeProfit = currentPrice + atr * 2; // Use let for reassignment
+  takeProfit = resistance || currentPrice + atr * 2; // Reassign based on resistance level
 
   // Calculate risk-to-reward ratio
   const riskToReward = (takeProfit - currentPrice) / (currentPrice - stopLoss);
