@@ -213,7 +213,7 @@ async function placeOrder(symbol, side, quantity) {
 
 async function evaluateStrategy() {
   try {
-    assetPrecision = await getAssetPrecision(SYMBOL); // Dynamically fetch precision
+    assetPrecision = await getAssetPrecision(SYMBOL);
 
     const data = await fetchKlines(SYMBOL, INTERVAL, 100);
     const closes = data.map((candle) => candle.close);
@@ -225,51 +225,52 @@ async function evaluateStrategy() {
     const { cprTop, cprBottom } = calculateCPR(data);
     const currentPrice = closes[closes.length - 1];
 
-    // Dynamic risk amount based on ATR
+    // Dynamic Risk Amount and Position Size
     let riskAmount = 200 * RISK_PER_TRADE;
-    if (atr > 10000) {
-      riskAmount = Math.max(riskAmount, 20); // Adjust risk dynamically for high ATR
-    }
+    if (atr > 10000) riskAmount = Math.max(riskAmount, 20); // Adjust for high ATR
+    if (atr < 2000) riskAmount = Math.min(riskAmount, 10); // Adjust for low ATR
 
-    // Calculate position size
     const rawPositionSize = riskAmount / atr;
     let positionSize = Math.max(rawPositionSize, 0.001).toFixed(assetPrecision || 3);
 
-    // Log debug information
-    console.log(
-      `ATR: ${atr}, Risk Amount: ${riskAmount}, Raw Position Size: ${rawPositionSize}, Final Position Size: ${positionSize}`
-    );
+    // Ensure position size meets Binance's minimum notional value
+    const notionalValue = positionSize * currentPrice;
+    const minNotional = 10; // Binance minimum notional value in USD
+    if (notionalValue < minNotional) {
+      positionSize = (minNotional / currentPrice).toFixed(assetPrecision || 3);
+    }
+
+    console.log(`ATR: ${atr}, Risk Amount: ${riskAmount}, Position Size: ${positionSize}, Notional Value: ${notionalValue}`);
 
     // Validate position size
-    if (parseFloat(positionSize) <= 0.001) {
+    if (parseFloat(positionSize) <= 0.001 || notionalValue < minNotional) {
       console.error("Calculated position size is invalid. Skipping trade.");
       await sendTelegramMessage("Invalid position size. Trade skipped.");
       return;
     }
 
-    // Stop-loss and Take-profit
-    let stopLoss = currentPrice - atr * 1.5; // Default stop-loss
-    let takeProfit = currentPrice + atr * 2; // Default take-profit
+    // Dynamic Stop-Loss and Take-Profit
+    let stopLoss = support || currentPrice - atr * (atr > 5000 ? 1.2 : 1.5); // Dynamic SL
+    let takeProfit = resistance || currentPrice + atr * (atr > 5000 ? 1.5 : 2.5); // Dynamic TP
     const riskToReward = (takeProfit - currentPrice) / (currentPrice - stopLoss);
 
-    // Adjust stop-loss and take-profit based on support/resistance
-    stopLoss = support || stopLoss;
-    takeProfit = resistance || takeProfit;
-
-    // Risk-to-reward validation
-    const minRiskToReward = atr > 500 ? 1.5 : 2;
+    // Risk-to-Reward Validation
+    const minRiskToReward = atr > 500 ? 1.2 : 2;
     if (riskToReward < minRiskToReward) {
-      console.log(`Trade skipped: Risk-to-reward ratio (${riskToReward}) is below minimum (${minRiskToReward}).`);
+      console.log(`Trade skipped: Risk-to-reward ratio (${riskToReward}) below minimum (${minRiskToReward}).`);
       await sendTelegramMessage("Trade skipped: Risk-to-reward ratio too low.");
       return;
     }
 
-    // Trade logic
+    // Long Trade Logic
     if (emaShort > emaLong && rsi > 50 && currentPrice > cprTop && currentPrice > support) {
       console.log("Long Signal Detected");
       stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "BUY");
       await placeOrder(SYMBOL, "BUY", positionSize, stopLoss, takeProfit);
-    } else if (emaShort < emaLong && rsi < 50 && currentPrice < cprBottom && currentPrice < resistance) {
+    }
+
+    // Short Trade Logic
+    else if (emaShort < emaLong && rsi < 50 && currentPrice < cprBottom && currentPrice < resistance) {
       console.log("Short Signal Detected");
       stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "SELL");
       await placeOrder(SYMBOL, "SELL", positionSize, stopLoss, takeProfit);
