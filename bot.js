@@ -223,10 +223,11 @@ async function evaluateStrategy() {
 
   const riskAmount = 200 * RISK_PER_TRADE;
   const rawPositionSize = riskAmount / atr; // Position size based on risk and ATR
-  const positionSize = Math.max(rawPositionSize, MAX_LOT_SIZE).toFixed(assetPrecision || 3); // Enforce minimum lot size
+  const positionSize = Math.min(rawPositionSize, MAX_LOT_SIZE).toFixed(assetPrecision || 3);
+  // Enforce minimum lot size
 
-  const stopLoss = currentPrice - atr; // Example stop-loss below the current price
-  const takeProfit = currentPrice + 2 * atr; // Example take-profit at 2x ATR above the price
+  const stopLoss = support || currentPrice - atr * 1.5;// Example stop-loss below the current price
+  const takeProfit = resistance || currentPrice + atr * 2; // Example take-profit at 2x ATR above the price
 
   // Calculate risk-to-reward ratio
   const riskToReward = (takeProfit - currentPrice) / (currentPrice - stopLoss);
@@ -242,15 +243,16 @@ async function evaluateStrategy() {
     return;
   }
 
-  if (riskToReward < 2) {
-    console.log("Trade does not meet the minimum risk-to-reward criteria. Skipping trade.");
+  const minRiskToReward = atr > 500 ? 1.5 : 2; // Example: Lower R:R for high volatility
+
+  if (riskToReward < minRiskToReward) {
+    console.log(`Trade skipped: Risk-to-reward ratio (${riskToReward}) is below minimum (${minRiskToReward}).`);
     await sendTelegramMessage("Trade skipped: Risk-to-reward ratio too low.");
     return;
   }
-
   // Long Trade Logic
   if (
-    riskToReward >= 2 &&
+
     emaShort > emaLong &&
     rsi > 50 &&
     currentPrice > cprTop &&
@@ -263,7 +265,7 @@ async function evaluateStrategy() {
 
   // Short Trade Logic
   else if (
-    riskToReward >= 2 &&
+
     emaShort < emaLong &&
     rsi < 50 &&
     currentPrice < cprBottom &&
