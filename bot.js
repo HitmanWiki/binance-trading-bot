@@ -259,49 +259,50 @@ async function evaluateStrategy() {
     // Optional: Code to run after try/catch
     console.log("Strategy evaluation cycle complete.");
   }
+
+
+  // Validation for position size
+  if (parseFloat(positionSize) <= 0.001) {
+    console.error("Calculated position size is invalid. Skipping trade.");
+    await sendTelegramMessage("Invalid position size. Trade skipped.");
+    return;
+  }
+  const minRiskToReward = atr > 500 ? 1.5 : 2; // Example: Lower R:R for high volatility
+
+  if (riskToReward < minRiskToReward) {
+    console.log(`Trade skipped: Risk-to-reward ratio (${riskToReward}) is below minimum (${minRiskToReward}).`);
+    await sendTelegramMessage("Trade skipped: Risk-to-reward ratio too low.");
+    return;
+  }
+
+  // Long Trade Logic
+  if (
+
+    emaShort > emaLong &&
+    rsi > 50 &&
+    currentPrice > cprTop &&
+    currentPrice > support
+  ) {
+    console.log("Long Signal Detected");
+    stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "BUY");
+    await placeOrder(SYMBOL, "BUY", positionSize, stopLoss, takeProfit);
+  }
+
+  // Short Trade Logic
+  else if (
+
+    emaShort < emaLong &&
+    rsi < 50 &&
+    currentPrice < cprBottom &&
+    currentPrice < resistance
+  ) {
+    console.log("Short Signal Detected");
+    stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "SELL");
+    await placeOrder(SYMBOL, "SELL", positionSize, stopLoss, takeProfit);
+  } else {
+    console.log("No trade signal detected.");
+  }
 }
-
-// Validation for position size
-if (parseFloat(positionSize) <= 0.001) {
-  console.error("Calculated position size is invalid. Skipping trade.");
-  // await sendTelegramMessage("Invalid position size. Trade skipped.");
-  return;
-}
-const minRiskToReward = atr > 500 ? 1.5 : 2; // Example: Lower R:R for high volatility
-
-if (riskToReward < minRiskToReward) {
-  console.log(`Trade skipped: Risk-to-reward ratio (${riskToReward}) is below minimum (${minRiskToReward}).`);
-  await sendTelegramMessage("Trade skipped: Risk-to-reward ratio too low.");
-  return;
-}
-// Long Trade Logic
-if (
-
-  emaShort > emaLong &&
-  rsi > 50 &&
-  currentPrice > cprTop &&
-  currentPrice > support
-) {
-  console.log("Long Signal Detected");
-  stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "BUY");
-  await placeOrder(SYMBOL, "BUY", positionSize, stopLoss, takeProfit);
-}
-
-// Short Trade Logic
-else if (
-
-  emaShort < emaLong &&
-  rsi < 50 &&
-  currentPrice < cprBottom &&
-  currentPrice < resistance
-) {
-  console.log("Short Signal Detected");
-  stopLoss = adjustTrailingStop(currentPrice, currentPrice, stopLoss, "SELL");
-  await placeOrder(SYMBOL, "SELL", positionSize, stopLoss, takeProfit);
-} else {
-  console.log("No trade signal detected.");
-}
-
 
 
 //Function to dynamically fetch asset precision
